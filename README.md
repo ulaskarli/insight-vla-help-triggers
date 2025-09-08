@@ -53,9 +53,19 @@ python insight/evaluate.py \
   --data_dir /your/test/data/here/
 ```
 
+Run Conformal Prediction based on False Not Ask (missed-help control)
+```bash
+python insight/cp.py --config experiments/configs/cp_fn.yaml
+```
+
+Run Conformal Prediction based on False Ask (false-ask control)
+```bash
+python insight/cp.py --config experiments/configs/cp_fa.yaml
+```
+
 ## 📜 Citation
 
-If you use this code, please cite:
+If you use this work, please cite:
 
 ```bibtex
 ```

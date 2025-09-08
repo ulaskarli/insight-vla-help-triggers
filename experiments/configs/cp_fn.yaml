@@ -1,0 +1,9 @@
+# Help-calibration: control missed-help <= beta
+data_root: "/home/ulas/Downloads/processed_help_10fold_val"
+folds: [0,1,2,3,4,5,6,7,8,9]
+use_val_in_calib: true
+mode: "fn"
+betas: [0.05, 0.10, 0.20]
+ent_agg: "p90"         # "p90" | "mean" | "trimmed_mean"
+ent_trim: 0.10
+out_dir: "experiments/results/cp_fn"
