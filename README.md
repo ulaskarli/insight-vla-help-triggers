@@ -18,19 +18,39 @@ pip install -r requirements.txt
 
 ## 🚀 Quickstart
 
-Run a toy inference example:
+Train MIL model:
 ```bash
-python insight/inference.py --config experiments/configs/example.yaml
+python insight/train.py --config experiments/configs/mil_weak.yaml
+# CKPT list saved to: experiments/results/mil_weak/mil_ckpts.json
 ```
 
-Train a baseline model:
+Test a MIL model
 ```bash
-python insight/train.py --config experiments/configs/mil_transformer.yaml
+# weak (bag-level)
+python insight/evaluate.py \
+  --mode mil-weak \
+  --ckpts_json experiments/results/mil_weak/mil_ckpts.json \
+  --data_dir /your/test/data/here/
+
+# strong (step-level)
+python insight/evaluate.py \
+  --mode mil-strong \
+  --ckpts_json experiments/results/mil_weak/mil_ckpts.json \
+  --data_dir /your/test/data/here/  
 ```
 
-Train a baseline model:
+Train strong supervised model:
 ```bash
-python insight/evaluate.py --results_dir experiments/results/mil_transformer/
+python insight/train.py --config experiments/configs/single_strong.yaml
+# CKPT list saved to: experiments/results/single_strong/single_ckpts.json
+```
+
+Test strong supervised model:
+```bash
+python insight/evaluate.py \
+  --mode single-strong \
+  --ckpts_json experiments/results/single_strong/single_ckpts.json \
+  --data_dir /your/test/data/here/
 ```
 
 ## 📜 Citation

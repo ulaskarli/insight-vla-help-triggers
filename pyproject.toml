@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "insight"
+version = "0.1.0"
+description = "INSIGHT: Inference-time Sequence Introspection for VLA Help Triggers"
+authors = [{ name = "Ulas Berk Karli" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "torch",
+  "scikit-learn",
+  "matplotlib",
+  "tqdm",
+  "pyyaml"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["insight*"]

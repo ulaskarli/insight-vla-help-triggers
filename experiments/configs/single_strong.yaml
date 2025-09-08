@@ -1,0 +1,15 @@
+mode: "single"
+seed: 1337
+data_dir: "/home/ulas/Downloads/data/processed_episode_mil_10fold"
+out_dir: "experiments/results/single_strong"
+n_folds: 10
+batch_size: 16
+epochs: 100
+lr: 1e-4
+patience: 10
+grad_clip: 1.0
+model:
+  d_in: 4
+  d_h: 64
+  nhead: 4
+  nlayers: 1
