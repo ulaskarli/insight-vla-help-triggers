@@ -1,0 +1,46 @@
+data_dir: "data/processed/strong_cv"
+n_folds: 10
+out_path: "experiments/results/realtime_eval.json"
+
+# Which methods to run
+eval_cp: true
+eval_single_on_bags: true
+eval_mil_steps: true
+
+# CP thresholds (use your calibrated numbers; you can also provide per-fold dicts)
+cp_mode: "ent"           # "any" | "both" | "ent" | "ppl"
+cp_tau_entropy: 3.99     # or: {"0": 0.74, "1": 0.71, ...}
+cp_tau_perplex:  1.7     # or: {"0": 6.6, "1": 6.9, ...}
+cp_entropy_agg: "p90"
+cp_entropy_trim: 0.10
+
+# Model ckpts (per fold)
+single_ckpts:
+  "0": "experiments/results/single_strong/single_fold0.pt"
+  "1": "experiments/results/single_strong/single_fold1.pt"
+  "2": "experiments/results/single_strong/single_fold2.pt"
+  "3": "experiments/results/single_strong/single_fold3.pt"
+  "4": "experiments/results/single_strong/single_fold4.pt"
+  "5": "experiments/results/single_strong/single_fold5.pt"
+  "6": "experiments/results/single_strong/single_fold6.pt"
+  "7": "experiments/results/single_strong/single_fold7.pt"
+  "8": "experiments/results/single_strong/single_fold8.pt"
+  "9": "experiments/results/single_strong/single_fold9.pt"
+  # ...
+
+mil_ckpts:
+  "0": "experiments/results/mil_weak/mil_fold0.pt"
+  "1": "experiments/results/mil_weak/mil_fold1.pt"
+  "2": "experiments/results/mil_weak/mil_fold2.pt"
+  "3": "experiments/results/mil_weak/mil_fold3.pt"
+  "4": "experiments/results/mil_weak/mil_fold4.pt"
+  "5": "experiments/results/mil_weak/mil_fold5.pt"
+  "6": "experiments/results/mil_weak/mil_fold6.pt"
+  "7": "experiments/results/mil_weak/mil_fold7.pt"
+  "8": "experiments/results/mil_weak/mil_fold8.pt"
+  "9": "experiments/results/mil_weak/mil_fold9.pt"
+  # ...
+
+# Step-level thresholds on logits (0 == prob 0.5)
+single_thr_logit: 0.5
+mil_thr_logit: 0.5

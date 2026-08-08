@@ -1,7 +1,7 @@
 mode: "mil"
 seed: 1337
-data_dir: "data/processed/weak_cv"
-out_dir: "experiments/results/mil_weak"
+data_dir: "data/processed/jumbo"
+out_dir: "experiments/results/mil_weak_jumbo"
 n_folds: 10
 batch_epi: 4
 epochs: 100

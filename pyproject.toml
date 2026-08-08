@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "INSIGHT: Inference-time Sequence Introspection for VLA Help Triggers"
 authors = [{ name = "Ulas Berk Karli" }]
 readme = "README.md"
-requires-python = ">=3.9"
+license = "Apache-2.0"
+requires-python = ">=3.10"
 dependencies = [
   "numpy",
   "torch",
@@ -21,3 +22,8 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["insight*"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8,<10"
+]

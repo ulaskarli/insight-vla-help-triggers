@@ -1,6 +1,2 @@
-numpy
-torch
-scikit-learn
-matplotlib
-tqdm
-pyyaml
+# Compatibility install only. Preferred workflow: `uv sync` (see README.md).
+-e .

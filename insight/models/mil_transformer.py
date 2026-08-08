@@ -47,12 +47,6 @@ class MILStepTransformer(nn.Module):
         self.pooling, self.beta = pooling, beta
 
     def forward(self, X, step_pad, tok_pad):
-        """
-        X: [B,S,T,D], step_pad:[B,S] True=PAD, tok_pad:[B,S,T] True=PAD
-        Returns:
-          step_logits: [B,S]
-          bag_prob:    [B]
-        """
         step_emb = self.token_enc(X, tok_pad)            # [B,S,H]
         step_logits = self.head(step_emb).squeeze(-1)    # [B,S]
         masked = step_logits.masked_fill(step_pad, float("-inf"))

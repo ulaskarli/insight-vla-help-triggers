@@ -25,3 +25,14 @@ logs/
 # OS/editor
 .DS_Store
 *.swp
+
+# Model weights / robot captures (publish intentionally as release assets, not Git blobs)
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/*.ckpt
+*.bag
+wandb/
+tensorboard/
+
+# Local robot intervention data
+insight_interventions/

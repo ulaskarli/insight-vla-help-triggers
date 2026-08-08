@@ -1,7 +1,7 @@
 mode: "single"
 seed: 1337
-data_dir: "data/processed/strong_cv"
-out_dir: "experiments/results/single_strong"
+data_dir: "data/processed/jumbo"
+out_dir: "experiments/results/single_strong_jumbo"
 n_folds: 10
 batch_size: 16
 epochs: 100

@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use INSIGHT, please cite the ICRA 2026 paper."
+title: "INSIGHT: INference-time Sequence Introspection for Generating Help Triggers in Vision-Language-Action Models"
+type: software
+authors:
+  - family-names: Karli
+    given-names: Ulas Berk
+  - family-names: Shangguan
+    given-names: Ziyao
+  - family-names: Fitzgerald
+    given-names: Tesca
+repository-code: "https://github.com/ulaskarli/insight-vla-help-triggers"
+url: "https://ulaskarli.github.io/insight-vla.github.io/"
+preferred-citation:
+  type: conference-paper
+  title: "INSIGHT: INference-time Sequence Introspection for Generating Help Triggers in Vision-Language-Action Models"
+  authors:
+    - family-names: Karli
+      given-names: Ulas Berk
+    - family-names: Shangguan
+      given-names: Ziyao
+    - family-names: Fitzgerald
+      given-names: Tesca
+  conference:
+    name: "2026 IEEE International Conference on Robotics and Automation (ICRA)"
+  year: 2026

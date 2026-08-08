@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Build K-fold datasets from raw episodes for:
-  (1) MIL bag-level (weak labels by episode) -> train_bags_{k}.pt / val_bags_{k}.pt / test_bags_{k}.pt
-  (2) Step-level (strong labels)             -> train_steps_{k}.pt / val_steps_{k}.pt / test_steps_{k}.pt
-
-Raw episode folder format:
-  episode_dir/
-    labels.json   # {"episode": "<name>", "labels": [{"step":"step_XXX.npy","label":0/1}, ...]}
-    step_000.npy
-    step_001.npy
-    ...
-
-Each step_*.npy is a dict with keys:
-  "outputs/au", "outputs/eu", "outputs/entropy", "outputs/perplexity"
-We load and trim to produce a [T,4] float32 array per step (columns: AU, EU, entropy, perplexity).
-"""
 
 import os, re, json, argparse
 from typing import Dict, List, Tuple, Optional, Any
@@ -33,12 +17,14 @@ def natural_key(s: str) -> Tuple:
 def rng_for(seed:int, random_state:int, fold:int, extra:int=0):
     return default_rng(seed + random_state*100 + fold*10 + extra)
 
-def read_rollout_results(path: Optional[str]) -> Dict[str, int]:
-    """Map episode_name -> bag label (0 success, 1 failure). Missing entries handled elsewhere."""
+def read_rollout_results(path: str) -> Dict[str, int]:
+    """
+    Map episode_name -> bag label (0=success, 1=failure).
+    File lines like:  <episode_name> : Success   OR   <episode_name> : Failure
+    """
+    if not path or not os.path.isfile(path):
+        raise FileNotFoundError("rollout_results.txt is required for weak-only datasets.")
     mapping: Dict[str, int] = {}
-    if path is None or (not os.path.isfile(path)):
-        print(f"[INFO] rollout_results.txt not provided/found; will infer episode labels from step labels.")
-        return mapping
     with open(path, "r") as f:
         for line in f:
             line = line.strip()
@@ -48,6 +34,8 @@ def read_rollout_results(path: Optional[str]) -> Dict[str, int]:
             status = parts[-1].strip().upper()
             if status.startswith("F"): mapping[ep] = 1
             elif status.startswith("S"): mapping[ep] = 0
+            else:
+                print(f"[WARN] Unrecognized status in line: {line!r} (skipping).")
     return mapping
 
 def list_episode_dirs(base_dir: str, ignore_dirs: List[str]) -> List[str]:
@@ -55,8 +43,9 @@ def list_episode_dirs(base_dir: str, ignore_dirs: List[str]) -> List[str]:
     for name in os.listdir(base_dir):
         p = os.path.join(base_dir, name)
         if os.path.isdir(p) and name not in ignore_dirs:
-            # require labels.json to be a valid episode dir
-            if os.path.isfile(os.path.join(p, "labels.json")):
+            # weak-only: accept any dir that has at least one step_*.npy
+            has_step = any(f.endswith(".npy") and f.startswith("step_") for f in os.listdir(p))
+            if has_step:
                 dirs.append(p)
     dirs.sort(key=lambda p: natural_key(os.path.basename(p)))
     return dirs
@@ -86,56 +75,35 @@ def load_step_timeseries(step_path: str, trim_head:int, trim_tail:int, min_len_a
         return None
     return np.stack([au, eu, ent, ppl], axis=-1).astype(np.float32)
 
-def read_labels_json(label_path: str) -> List[Dict[str, Any]]:
-    with open(label_path, 'r') as f:
-        data = json.load(f)
-    return data.get("labels", [])
-
-def get_item_label(item: Dict[str, Any]) -> int:
-    # required by your spec; assume always present and 0/1
-    return int(item["label"])
-
-def load_episode(ep_dir: str,
-                 ep_label_map: Dict[str, int],
-                 trim_head:int, trim_tail:int, min_len_after:int) -> tuple[List[np.ndarray], int, str, List[int]]:
+def load_episode_weak(ep_dir: str,
+                      ep_label_map: Dict[str, int],
+                      trim_head:int, trim_tail:int, min_len_after:int) -> tuple[List[np.ndarray], int, str]:
     """
-    Returns:
-      steps:       List[np.ndarray[T,4]]
-      bag_label:   int (0 success, 1 failure)
-      ep_name:     str
-      step_labels: List[int] (same length as steps)
+    Weak-only: no labels.json. Gather step_*.npy (sorted), return (steps, bag_label, name).
     """
     name = os.path.basename(ep_dir)
-    labels_json = os.path.join(ep_dir, "labels.json")
-    items = read_labels_json(labels_json)
+    if name not in ep_label_map:
+        raise KeyError(f"Episode '{name}' missing in rollout_results.txt")
+    bag_label = int(ep_label_map[name])
 
-    # steps listed explicitly in labels.json (source of truth for ordering & labels)
-    step_files = [os.path.join(ep_dir, it["step"]) for it in items]
-    step_files = sorted(step_files, key=lambda p: natural_key(os.path.basename(p)))
-    step_labels_all = [get_item_label(it) for it in sorted(items, key=lambda it: natural_key(it["step"]))]
-
+    step_files = sorted(
+        [os.path.join(ep_dir, f) for f in os.listdir(ep_dir) if f.endswith(".npy") and f.startswith("step_")],
+        key=lambda p: natural_key(os.path.basename(p))
+    )
     steps: List[np.ndarray] = []
-    step_labels: List[int] = []
-    for fp, y in zip(step_files, step_labels_all):
+    for fp in step_files:
         arr = load_step_timeseries(fp, trim_head, trim_tail, min_len_after)
         if arr is not None:
             steps.append(arr)
-            step_labels.append(int(y))
 
     if len(steps) == 0:
         print(f"[WARN] Episode {name} has no usable steps after trimming (skipping).")
-        return [], 0, name, []
+        return [], bag_label, name
 
-    # decide bag label: prefer rollout_results mapping; fallback to any step has label==1
-    if name in ep_label_map:
-        bag_label = int(ep_label_map[name])
-    else:
-        bag_label = int(any(y == 1 for y in step_labels))
-
-    return steps, bag_label, name, step_labels
+    return steps, bag_label, name
 
 # ---------------------------
-# Uncertainty heuristics (for anchors) + mixing
+# Uncertainty heuristics (anchors) + mixing (unchanged)
 # ---------------------------
 def step_score_uncert(step_arr: np.ndarray) -> float:
     """score = max(max(entropy), max(perplexity)) on [T,4]."""
@@ -171,7 +139,6 @@ def pick_subseq_bounds(rng, length:int, min_len:int, max_len:int,
             ok_exc = all((i not in idxs) for i in must_exclude)
         if ok_inc and ok_exc:
             return start, end
-    # fallback
     win_len = int(rng.integers(min_len, min(max_len, L)+1))
     start = 0 if L == win_len else int(rng.integers(0, L - win_len + 1))
     return start, start + win_len
@@ -184,7 +151,7 @@ def maybe_mix_success_steps(rng, bag_steps: List[np.ndarray], pool_success_steps
     donor = pool_success_steps[int(rng.integers(0, len(pool_success_steps)))]
     if len(donor) == 0: return bag_steps
     k = int(rng.integers(1, min(mix_max_steps, len(donor)) + 1))
-    idxs = np.random.choice(len(donor), size=k, replace=False)
+    idxs = rng.choice(len(donor), size=k, replace=False)
     return bag_steps + [donor[i] for i in idxs]
 
 def build_augmented_bags_for_split(
@@ -250,22 +217,14 @@ def build_deterministic_bags(X_eps: List[List[np.ndarray]], y_eps: np.ndarray, n
         bags_X.append(steps[:]); bags_y.append(int(y)); bags_src.append(f"{nm}#all")
     return bags_X, np.array(bags_y, dtype=np.int64), bags_src
 
-def flatten_steps_for_pack(X_eps: List[List[np.ndarray]], y_steps_eps: List[List[int]]):
-    X_steps: List[np.ndarray] = []
-    y_steps: List[int] = []
-    for steps, ys in zip(X_eps, y_steps_eps):
-        for s, y in zip(steps, ys):
-            X_steps.append(s); y_steps.append(int(y))
-    return X_steps, np.array(y_steps, dtype=np.int64)
-
 # ---------------------------
-# Main
+# CLI
 # ---------------------------
 def parse_args():
-    ap = argparse.ArgumentParser(description="Build K-fold MIL-bag and step-level datasets from raw episodes.")
+    ap = argparse.ArgumentParser(description="Build K-fold MIL bag datasets (weak labels only).")
     # Paths
-    ap.add_argument("--base_dir", required=True, help="Folder containing episode subdirectories (each has labels.json and step_*.npy)")
-    ap.add_argument("--rollout_results", default=None, help="Optional path to rollout_results.txt mapping episode -> Success/Failure")
+    ap.add_argument("--base_dir", required=True, help="Folder containing episode subdirectories (only step_*.npy)")
+    ap.add_argument("--rollout_results", required=True, help="Path to rollout_results.txt mapping episode -> Success/Failure")
     ap.add_argument("--out_dir", required=True, help="Output directory for processed packs")
     ap.add_argument("--ignore_dirs", nargs="*", default=["processed_episode_mil_10fold", "processed_help_10fold_val", "processed_kfold"])
     # Splits
@@ -302,6 +261,9 @@ def parse_args():
     ap.add_argument("--val_use_mixing", type=int, default=0)
     return ap.parse_args()
 
+# ---------------------------
+# Main
+# ---------------------------
 def main():
     args = parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
@@ -309,19 +271,20 @@ def main():
     ep_label_map = read_rollout_results(args.rollout_results)
     ep_dirs = list_episode_dirs(args.base_dir, ignore_dirs=args.ignore_dirs)
 
-    X_eps, y_eps, names, Ysteps_eps = [], [], [], []
-
+    # Load episodes (weak)
+    X_eps, y_eps, names = [], [], []
     for ep_dir in ep_dirs:
-        steps, bag_y, name, step_labels = load_episode(
-            ep_dir, ep_label_map,
-            trim_head=args.trim_head, trim_tail=args.trim_tail, min_len_after=args.min_len_after_trim
-        )
+        try:
+            steps, bag_y, name = load_episode_weak(
+                ep_dir, ep_label_map,
+                trim_head=args.trim_head, trim_tail=args.trim_tail, min_len_after=args.min_len_after_trim
+            )
+        except KeyError as e:
+            print(f"[WARN] {e} (skipping)")
+            continue
         if len(steps) == 0:
             continue
-        X_eps.append(steps)
-        y_eps.append(bag_y)
-        names.append(name)
-        Ysteps_eps.append(step_labels)
+        X_eps.append(steps); y_eps.append(bag_y); names.append(name)
 
     n = len(X_eps)
     if n == 0:
@@ -331,7 +294,7 @@ def main():
     print(f"✅ Loaded {n} episodes from {args.base_dir}")
     print(f"   Failure ratio (episodes): {y_arr.mean():.3f}")
 
-    # Prepare K-fold
+    # K-fold
     kf = KFold(n_splits=args.n_splits, shuffle=True, random_state=args.random_state)
 
     for fold, (tr_idx, te_idx) in enumerate(kf.split(range(n))):
@@ -341,12 +304,10 @@ def main():
             X = [X_eps[i] for i in ix]
             y = np.array([y_eps[i] for i in ix], dtype=np.int64)
             nm = [names[i] for i in ix]
-            ys = [Ysteps_eps[i] for i in ix]
-            return X, y, nm, ys
+            return X, y, nm
 
-        # Outer splits
-        X_te, y_te, nm_te, ys_te = subset(te_idx)
-        X_tr_all, y_tr_all, nm_tr_all, ys_tr_all = subset(tr_idx)
+        X_te, y_te, nm_te = subset(te_idx)
+        X_tr_all, y_tr_all, nm_tr_all = subset(tr_idx)
 
         # Train/Val split from outer train
         if args.stratify_by_task:
@@ -367,14 +328,12 @@ def main():
         X_tr = [X_eps[i] for i in tr_ids]
         y_tr = np.array([y_eps[i] for i in tr_ids], dtype=np.int64)
         nm_tr= [names[i] for i in tr_ids]
-        ys_tr= [Ysteps_eps[i] for i in tr_ids]
 
-        X_va, y_va, nm_va, ys_va = [], np.array([]), [], []
+        X_va, y_va, nm_va = [], np.array([]), []
         if len(va_ids) > 0:
             X_va = [X_eps[i] for i in va_ids]
             y_va = np.array([y_eps[i] for i in va_ids], dtype=np.int64)
             nm_va= [names[i] for i in va_ids]
-            ys_va= [Ysteps_eps[i] for i in va_ids]
 
         print(f"   Episodes -> Train {len(X_tr)} | Val {len(X_va)} | Test {len(X_te)}")
         if len(y_tr) > 0:
@@ -383,7 +342,7 @@ def main():
             msg += f" | test {y_te.mean():.3f}"
             print(msg)
 
-        # ===== Save EPISODE packs (reference) =====
+        # ===== Save EPISODE packs (reference, optional) =====
         torch.save((X_tr, y_tr, nm_tr), os.path.join(args.out_dir, f"train_{fold}.pt"))
         if len(X_va) > 0:
             torch.save((X_va, y_va, nm_va), os.path.join(args.out_dir, f"val_{fold}.pt"))
@@ -439,28 +398,10 @@ def main():
                 torch.save((va_bags_X, va_bags_y, va_bags_src), os.path.join(args.out_dir, f"val_bags_{fold}.pt"))
                 print(f"   💾 val_bags_{fold}.pt    bags={len(va_bags_y)}  pos={int(va_bags_y.sum())}  neg={int((va_bags_y==0).sum())}")
 
-        # Test bags (deterministic)
+        # Test bags (deterministic, one per episode)
         te_bags_X, te_bags_y, te_bags_src = build_deterministic_bags(X_te, y_te, nm_te)
         torch.save((te_bags_X, te_bags_y, te_bags_src), os.path.join(args.out_dir, f"test_bags_{fold}.pt"))
         print(f"   💾 test_bags_{fold}.pt   bags={len(te_bags_y)}  pos={int(te_bags_y.sum())}  neg={int((te_bags_y==0).sum())}")
-
-        # ===== STEP DATASETS (always strong labels from labels.json) =====
-        def pack_steps(X_eps_split, y_steps_eps_split, out_name):
-            X_steps, y_steps = [], []
-            for steps, ys in zip(X_eps_split, y_steps_eps_split):
-                if ys is None or len(ys) != len(steps):
-                    continue
-                for s, y in zip(steps, ys):
-                    X_steps.append(s)
-                    y_steps.append(int(y))
-            torch.save((X_steps, np.array(y_steps, dtype=np.int64)),
-                       os.path.join(args.out_dir, f"{out_name}_{fold}.pt"))
-            print(f"   💾 {out_name}_{fold}.pt  steps={len(y_steps)} pos={int(np.sum(y_steps))}")
-
-        pack_steps(X_tr, ys_tr, "train_steps")
-        if len(X_va) > 0:
-            pack_steps(X_va, ys_va, "val_steps")
-        pack_steps(X_te, ys_te, "test_steps")
 
     print(f"\n📦 Done! Saved to '{args.out_dir}'")
 
